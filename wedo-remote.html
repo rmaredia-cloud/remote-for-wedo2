@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeDo 2.0 Remote Control</title>
+    <!-- Load Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Enforce full-screen height and hide scrollbars */
+        html, body { 
+            height: 100vh; 
+            width: 100vw;
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+        body::-webkit-scrollbar { display: none; } /* Chrome, Safari, Opera */
+        
+        /* Center content vertically and horizontally */
+        body { 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        /* Custom styling for the buttons to give a LEGO feel */
+        .lego-btn {
+            transition: all 0.1s ease-in-out;
+            box-shadow: 0 4px 0 0 #1f2937; /* Base shadow for lift */
+        }
+        .lego-btn:active {
+            box-shadow: 0 1px 0 0 #1f2937; /* Reduced shadow for press effect */
+            transform: translateY(3px);
+        }
+        
+        /* Status Dot for Port Detection */
+        .status-dot {
+            height: 12px;
+            width: 12px;
+            background-color: #d1d5db; /* gray-300 */
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+            transition: all 0.3s ease;
+        }
+        .status-dot.active {
+            background-color: #22c55e; /* green-500 */
+            box-shadow: 0 0 8px #22c55e;
+        }
+
+        /* Joystick Track Styles */
+        .joystick-track {
+            background-size: 100% 100%;
+            background-position: center;
+            border: 2px solid #ccc;
+            /* Initial Vertical Style */
+            background: linear-gradient(to top, #f87171 0%, #fca5a5 49%, #86efac 51%, #4ade80 100%);
+        }
+        
+        /* Joystick Handle Styles */
+        .joystick-handle {
+            width: 50px;
+            height: 50px;
+            border: 4px solid white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            cursor: pointer;
+            z-index: 10;
+            user-select: none;
+            touch-action: none; /* Prevents scrolling on touch screens */
+            /* Initial center position for handle */
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%);
+        }
+        
+        /* Ensure the main container can scroll if content exceeds screen size (e.g., in landscape mode on small phones) */
+        .main-container {
+            max-height: 100%;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans text-gray-800">
+
+    <div class="main-container w-full max-w-lg sm:max-w-4xl bg-white p-6 rounded-xl shadow-2xl space-y-6">
+        
+        <!-- Header -->
+        <div class="relative">
+            <h1 class="text-3xl font-extrabold text-blue-600 text-center">WeDo 2.0 Remote</h1>
+            <p class="text-sm text-gray-500 text-center">Configurable Motor Control</p>
+        </div>
+
+        <!-- Connection Status & Controls (Collapsible) -->
+        <div id="connectionWrapper" class="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
+            
+            <!-- Connection Button (Visible when disconnected) -->
+            <button onclick="connectHub()" id="connectBtn" 
+                class="lego-btn w-full py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg shadow-md transition duration-150 ease-in-out">
+                Connect WeDo Hub
+            </button>
+            
+            <!-- Toggle Button (Visible when connected) -->
+            <button id="toggleControlsBtn" onclick="toggleConnectionControls()" 
+                class="hidden w-full py-2 bg-gray-400 hover:bg-gray-500 text-white font-semibold rounded-lg text-sm transition duration-150 ease-in-out">
+                Show Controls
+            </button>
+
+            <!-- Inner Controls (Toggled visibility) -->
+            <div id="connectionControlsInner" class="space-y-4 hidden">
+                <div id="status" class="text-center font-bold text-lg text-red-500">
+                    Disconnected
+                </div>
+                
+                <button onclick="disconnectHub()" id="disconnectBtn" 
+                    class="lego-btn w-full py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg shadow-md transition duration-150 ease-in-out">
+                    Disconnect
+                </button>
+            </div>
+        </div>
+        
+        <!-- Joystick Controls - RESPONSIVE CONTAINER (sm: for better landscape support) -->
+        <div class="flex flex-col sm:flex-row sm:space-x-6 space-y-6 sm:space-y-0">
+            
+            <!-- Motor A (Port 1) - Joystick -->
+            <div class="p-4 bg-blue-50 rounded-lg shadow-inner flex-1 relative transition-all duration-300 border-2 border-transparent" id="panel-port-1">
+                <!-- Port Status Indicator -->
+                <div class="absolute top-4 right-4 flex items-center bg-white/80 px-2 py-1 rounded-full text-xs font-bold text-gray-600 shadow-sm">
+                    <span id="dot-port-1" class="status-dot"></span> Port 1
+                </div>
+
+                <h2 class="text-xl font-bold mb-3 text-blue-700 text-center">Motor A</h2>
+                
+                <!-- Joystick Area -->
+                <div class="flex flex-col items-center">
+                    
+                    <!-- Config Controls for Motor A - HIDDEN BY DEFAULT -->
+                    <div id="configControlsA" class="flex space-x-2 mb-4 w-full justify-center hidden">
+                        <select id="orientationA" onchange="updateJoystickLayout(1)" class="p-1 border rounded-lg text-sm">
+                            <option value="vertical">Vertical</option>
+                            <option value="horizontal">Horizontal</option>
+                        </select>
+                        <select id="inversionA" onchange="updateJoystickLayout(1)" class="p-1 border rounded-lg text-sm">
+                            <option value="normal">Normal</option>
+                            <option value="inverted">Inverted (180°)</option>
+                        </select>
+                    </div>
+
+                    <div class="flex flex-col items-center" id="joystickWrapperA">
+                        
+                        <!-- Top Label (Vertical) / Left Label (Horizontal) -->
+                        <p class="text-xs font-bold mb-1 text-green-600" id="labelPosA">FORWARD (100)</p>
+                        
+                        <!-- Track and Side Labels Container -->
+                        <div class="flex items-center" id="trackContainerA"> 
+                            <!-- Left Label (Horizontal) -->
+                            <p class="text-xs font-bold mr-2 text-red-600 hidden" id="labelLeftA">LEFT (-100)</p>
+                            
+                            <!-- Track Element: Initial setup is vertical -->
+                            <div class="relative w-12 h-[200px] rounded-xl flex justify-center joystick-track" id="joystickTrackA">
+                                <div class="absolute bg-blue-500 rounded-full joystick-handle" id="joystickHandleA"></div>
+                            </div>
+                            
+                            <!-- Right Label (Horizontal) -->
+                            <p class="text-xs font-bold ml-2 text-green-600 hidden" id="labelRightA">RIGHT (100)</p>
+                        </div>
+                        
+                        <!-- Bottom Label (Vertical) -->
+                        <p class="text-xs font-bold mt-1 text-red-600" id="labelNegA">BACKWARD (-100)</p>
+                        
+                        <div class="text-center mt-3 text-lg font-bold text-gray-800">Speed: <span id="speedValueA" class="text-blue-600">0</span>%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Motor B (Port 2) - Joystick -->
+            <div class="p-4 bg-purple-50 rounded-lg shadow-inner flex-1 relative transition-all duration-300 border-2 border-transparent" id="panel-port-2">
+                <!-- Port Status Indicator -->
+                <div class="absolute top-4 right-4 flex items-center bg-white/80 px-2 py-1 rounded-full text-xs font-bold text-gray-600 shadow-sm">
+                    <span id="dot-port-2" class="status-dot"></span> Port 2
+                </div>
+
+                <h2 class="text-xl font-bold mb-3 text-purple-700 text-center">Motor B</h2>
+
+                <!-- Joystick Area -->
+                <div class="flex flex-col items-center">
+                    <!-- Config Controls for Motor B - HIDDEN BY DEFAULT -->
+                    <div id="configControlsB" class="flex space-x-2 mb-4 w-full justify-center hidden">
+                        <select id="orientationB" onchange="updateJoystickLayout(2)" class="p-1 border rounded-lg text-sm">
+                            <option value="vertical">Vertical</option>
+                            <option value="horizontal">Horizontal</option>
+                        </select>
+                        <select id="inversionB" onchange="updateJoystickLayout(2)" class="p-1 border rounded-lg text-sm">
+                            <option value="normal">Normal</option>
+                            <option value="inverted">Inverted (180°)</option>
+                        </select>
+                    </div>
+
+                    <div class="flex flex-col items-center" id="joystickWrapperB">
+                        
+                        <!-- Top Label (Vertical) / Left Label (Horizontal) -->
+                        <p class="text-xs font-bold mb-1 text-green-600" id="labelPosB">FORWARD (100)</p>
+                        
+                        <!-- Track and Side Labels Container -->
+                        <div class="flex items-center" id="trackContainerB"> 
+                            <!-- Left Label (Horizontal) -->
+                            <p class="text-xs font-bold mr-2 text-red-600 hidden" id="labelLeftB">LEFT (-100)</p>
+                            
+                            <!-- Track Element: Initial setup is vertical -->
+                            <div class="relative w-12 h-[200px] rounded-xl flex justify-center joystick-track" id="joystickTrackB">
+                                <div class="absolute bg-purple-500 rounded-full joystick-handle" id="joystickHandleB"></div>
+                            </div>
+                            
+                            <!-- Right Label (Horizontal) -->
+                            <p class="text-xs font-bold ml-2 text-green-600 hidden" id="labelRightB">RIGHT (100)</p>
+                        </div>
+                        
+                        <!-- Bottom Label (Vertical) -->
+                        <p class="text-xs font-bold mt-1 text-red-600" id="labelNegB">BACKWARD (-100)</p>
+                        
+                        <div class="text-center mt-3 text-lg font-bold text-gray-800">Speed: <span id="speedValueB" class="text-purple-600">0</span>%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Use the official LEGO WeDo 2.0 Service UUID for discovery filtering
+        const OFFICIAL_WEDO_SERVICE_UUID = '00001523-1212-efde-1523-785feabcd123';
+        
+        // Use your provided custom/working UUIDs for the actual GATT connection
+        const WORKING_SERVICE_UUID = '00004f0e-1212-efde-1523-785feabcd123';
+        const WORKING_MOTOR_CHAR_UUID = '00001565-1212-efde-1523-785feabcd123'; 
+        const WORKING_DEVICE_INFO_CHAR_UUID = '00001527-1212-efde-1523-785feabcd123'; 
+        
+        const CMD_MOTOR_TYPE = 0x01;  
+        const CMD_MOTOR_ARG = 0x01;   
+        
+        const STATUS_LABEL = document.getElementById('status');
+        const CONNECT_BTN = document.getElementById('connectBtn');
+        const DISCONNECT_BTN = document.getElementById('disconnectBtn');
+        const TOGGLE_CONTROLS_BTN = document.getElementById('toggleControlsBtn');
+        const CONNECTION_CONTROLS_INNER = document.getElementById('connectionControlsInner');
+        
+        const CONFIG_CONTROLS_A = document.getElementById('configControlsA');
+        const CONFIG_CONTROLS_B = document.getElementById('configControlsB');
+
+
+        let wedoHub = null;
+        let motorCharacteristic = null;
+        let deviceInfoCharacteristic = null;
+
+        const commandQueue = [];
+        let isWriting = false;
+
+        let activeHandle = null;
+        let containerRect = null;
+        let maxDragDistance = 0; 
+        
+        let lastSentSpeed = { 1: 0, 2: 0 }; 
+        const SPEED_QUANTIZATION = 10; 
+        
+        const motorConfigs = {
+            1: { orientation: 'vertical', inverted: false },
+            2: { orientation: 'vertical', inverted: false }
+        };
+
+        function toggleConnectionControls() {
+            const isHidden = CONNECTION_CONTROLS_INNER.classList.toggle('hidden');
+            CONFIG_CONTROLS_A.classList.toggle('hidden', isHidden);
+            CONFIG_CONTROLS_B.classList.toggle('hidden', isHidden);
+            
+            if (isHidden) {
+                TOGGLE_CONTROLS_BTN.textContent = 'Show Controls';
+                TOGGLE_CONTROLS_BTN.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+                TOGGLE_CONTROLS_BTN.classList.add('bg-gray-400', 'hover:bg-gray-500');
+            } else {
+                TOGGLE_CONTROLS_BTN.textContent = 'Hide Controls';
+                TOGGLE_CONTROLS_BTN.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                TOGGLE_CONTROLS_BTN.classList.remove('bg-gray-400', 'hover:bg-gray-500');
+            }
+        }
+
+        function updateStatus(connected, text, color) {
+            STATUS_LABEL.textContent = text;
+            STATUS_LABEL.className = `text-center font-bold text-lg ${color}`;
+            
+            if (connected) {
+                CONNECT_BTN.classList.add('hidden');
+                TOGGLE_CONTROLS_BTN.classList.remove('hidden');
+            } else {
+                CONNECT_BTN.classList.remove('hidden');
+                TOGGLE_CONTROLS_BTN.classList.add('hidden');
+                CONNECTION_CONTROLS_INNER.classList.remove('hidden'); 
+            }
+
+            if (!connected) {
+                setPortStatus(1, false);
+                setPortStatus(2, false);
+            }
+        }
+
+        function setPortStatus(port, isActive) {
+            const dot = document.getElementById(`dot-port-${port}`);
+            const panel = document.getElementById(`panel-port-${port}`);
+            
+            if (isActive) {
+                dot.classList.add('active');
+                panel.classList.add('border-green-400');
+                panel.classList.remove('border-transparent');
+            } else {
+                dot.classList.remove('active');
+                panel.classList.remove('border-green-400');
+                panel.classList.add('border-transparent');
+            }
+        }
+
+        function calculatePowerByte(speed) {
+            if (speed === 0) return 0x00;
+            if (speed > 0) return Math.min(100, Math.max(1, speed)); 
+            const signedSpeed = Math.max(-100, Math.min(-1, speed));
+            return 256 + signedSpeed; 
+        }
+
+        function bytesToHex(bytes) {
+             return Array.from(bytes).map(b => '0x' + b.toString(16).padStart(2, '0')).join(', ');
+        }
+
+        function createMotorCommand(port, dataByte) {
+            return new Uint8Array([port, CMD_MOTOR_TYPE, CMD_MOTOR_ARG, dataByte]);
+        }
+
+        function safeWrite(data, description) {
+            commandQueue.push({ data, description });
+            processQueue();
+        }
+
+        async function processQueue() {
+            if (isWriting || commandQueue.length === 0 || !motorCharacteristic) return;
+            isWriting = true;
+            const cmd = commandQueue.shift();
+            try {
+                await motorCharacteristic.writeValue(cmd.data);
+                console.log(`Success: ${cmd.description}`);
+            } catch (error) {
+                console.error(`Write Error: ${error.message}`);
+            }
+            isWriting = false;
+            if (commandQueue.length > 0) setTimeout(processQueue, 20); 
+        }
+
+        function sendMotorSpeed(port, speed) {
+            if (!motorCharacteristic) return;
+            const speedQuantized = Math.round(speed / SPEED_QUANTIZATION) * SPEED_QUANTIZATION;
+            if (speedQuantized === lastSentSpeed[port] && speed !== 0) return;
+            lastSentSpeed[port] = speedQuantized;
+            const powerByte = calculatePowerByte(speedQuantized); 
+            const command = createMotorCommand(port, powerByte);
+            safeWrite(command, `Motor ${port} speed ${speedQuantized}%`);
+        }
+
+        function handleNotifications(event) {
+            const value = event.target.value;
+            if (value.byteLength === 0) return;
+            const portId = value.getUint8(0); 
+            if (portId === 1) setPortStatus(1, true);
+            if (portId === 2) setPortStatus(2, true);
+        }
+
+        function updateJoystickLayout(port) {
+            const motorPrefix = port === 1 ? 'A' : 'B';
+            const track = document.getElementById(`joystickTrack${motorPrefix}`);
+            const trackContainer = document.getElementById(`trackContainer${motorPrefix}`);
+            const wrapper = document.getElementById(`joystickWrapper${motorPrefix}`);
+            const labelPos = document.getElementById(`labelPos${motorPrefix}`); 
+            const labelNeg = document.getElementById(`labelNeg${motorPrefix}`); 
+            const labelLeft = document.getElementById(`labelLeft${motorPrefix}`);
+            const labelRight = document.getElementById(`labelRight${motorPrefix}`);
+            const orientation = document.getElementById(`orientation${motorPrefix}`).value;
+            const inverted = document.getElementById(`inversion${motorPrefix}`).value === 'inverted';
+
+            motorConfigs[port].orientation = orientation;
+            motorConfigs[port].inverted = inverted;
+
+            const handle = document.getElementById(`joystickHandle${motorPrefix}`);
+            handle.style.top = '50%';
+            handle.style.left = '50%';
+            sendMotorSpeed(port, 0);
+
+            track.classList.remove('w-12', 'h-[200px]', 'h-12', 'w-[200px]');
+            if (orientation === 'vertical') {
+                track.classList.add('w-12', 'h-[200px]');
+                track.style.background = 'linear-gradient(to top, #f87171 0%, #fca5a5 49%, #86efac 51%, #4ade80 100%)';
+                wrapper.className = "flex flex-col items-center";
+                trackContainer.className = "flex items-center";
+                labelPos.className = "text-xs font-bold mb-1 text-green-600";
+                labelNeg.className = "text-xs font-bold mt-1 text-red-600";
+                labelLeft.className = "hidden";
+                labelRight.className = "hidden";
+                labelPos.textContent = inverted ? 'BACKWARD (-100)' : 'FORWARD (100)';
+                labelNeg.textContent = inverted ? 'FORWARD (100)' : 'BACKWARD (-100)';
+            } else { 
+                track.classList.add('h-12', 'w-[200px]');
+                track.style.background = 'linear-gradient(to right, #f87171 0%, #fca5a5 49%, #86efac 51%, #4ade80 100%)';
+                wrapper.className = "flex flex-col items-center";
+                trackContainer.className = "flex flex-row items-center";
+                labelPos.className = "hidden"; 
+                labelNeg.className = "hidden";
+                labelLeft.className = "text-xs font-bold mr-2 text-red-600"; 
+                labelRight.className = "text-xs font-bold ml-2 text-green-600";
+                labelRight.textContent = inverted ? 'LEFT (-100)' : 'RIGHT (100)';
+                labelLeft.textContent = inverted ? 'RIGHT (100)' : 'LEFT (-100)';
+            }
+        }
+
+        function setupJoystick(port) {
+            const track = document.getElementById(`joystickTrack${port === 1 ? 'A' : 'B'}`);
+            ['mousedown', 'touchstart'].forEach(t => track.addEventListener(t, (e) => startDrag(e, port)));
+            ['mouseup', 'touchend'].forEach(t => document.addEventListener(t, (e) => stopDrag(e, port)));
+            track.addEventListener('mouseleave', (e) => {
+                if (activeHandle && activeHandle.port === port && !e.buttons) stopDrag(e, port);
+            });
+            updateJoystickLayout(port);
+        }
+
+        function startDrag(e, port) {
+            e.preventDefault(); 
+            const motorPrefix = port === 1 ? 'A' : 'B';
+            const handle = document.getElementById(`joystickHandle${motorPrefix}`);
+            const track = document.getElementById(`joystickTrack${motorPrefix}`);
+            const config = motorConfigs[port];
+            const isTouch = !!e.touches;
+            const clientCoord = isTouch ? { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY } : e;
+
+            activeHandle = { 
+                port: port,
+                handle: handle,
+                track: track,
+                speedDisplay: document.getElementById(`speedValue${motorPrefix}`),
+                isTouch: isTouch
+            };
+            
+            containerRect = track.getBoundingClientRect();
+            const handleSize = handle.offsetHeight; 
+            if (config.orientation === 'vertical') {
+                maxDragDistance = (containerRect.height - handleSize) / 2;
+            } else { 
+                maxDragDistance = (containerRect.width - handleSize) / 2;
+            }
+            
+            document.addEventListener('mousemove', onDrag);
+            document.addEventListener('touchmove', onDrag, { passive: false });
+            onDrag(e);
+        }
+
+        function onDrag(e) {
+            if (!activeHandle) return;
+            const { port, handle, speedDisplay, isTouch } = activeHandle;
+            const config = motorConfigs[port];
+            if (isTouch) e.preventDefault();
+            const clientCoord = e.touches ? { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY } : e;
+            const handleSize = handle.offsetHeight;
+            let centerOffset = 0; 
+            handle.style.transition = 'none'; 
+            
+            if (config.orientation === 'vertical') {
+                let yPos = clientCoord.clientY - containerRect.top;
+                yPos = Math.max(handleSize / 2, Math.min(containerRect.height - handleSize / 2, yPos));
+                handle.style.top = `${yPos}px`;
+                handle.style.left = '50%';
+                centerOffset = yPos - (containerRect.height / 2);
+                let calc = Math.round((centerOffset / maxDragDistance) * 100);
+                var speed = config.inverted ? calc : -calc;
+            } else { 
+                let xPos = clientCoord.clientX - containerRect.left;
+                xPos = Math.max(handleSize / 2, Math.min(containerRect.width - handleSize / 2, xPos));
+                handle.style.left = `${xPos}px`;
+                handle.style.top = '50%';
+                centerOffset = xPos - (containerRect.width / 2);
+                let calc = Math.round((centerOffset / maxDragDistance) * 100);
+                var speed = config.inverted ? -calc : calc;
+            }
+            
+            speed = Math.max(-100, Math.min(100, speed));
+            const speedToDisplay = Math.round(speed / SPEED_QUANTIZATION) * SPEED_QUANTIZATION;
+            speedDisplay.innerText = Math.abs(speedToDisplay);
+            handle.classList.remove('bg-blue-500', 'bg-red-500', 'bg-purple-500', 'bg-green-500');
+            const colorClass = port === 1 ? 'bg-blue-500' : 'bg-purple-500';
+            if (speedToDisplay > 0) handle.classList.add('bg-green-500');
+            else if (speedToDisplay < 0) handle.classList.add('bg-red-500');
+            else handle.classList.add(colorClass);
+            sendMotorSpeed(port, speed);
+        }
+
+        function stopDrag(e, port) {
+            if (!activeHandle || activeHandle.port !== port) return;
+            const { handle, speedDisplay } = activeHandle;
+            document.removeEventListener('mousemove', onDrag);
+            document.removeEventListener('touchmove', onDrag);
+            handle.style.transition = 'all 0.1s ease-out';
+            handle.style.top = '50%';
+            handle.style.left = '50%';
+            sendMotorSpeed(port, 0);
+            speedDisplay.innerText = '0';
+            handle.classList.remove('bg-red-500', 'bg-green-500');
+            handle.classList.add(port === 1 ? 'bg-blue-500' : 'bg-purple-500');
+            activeHandle = null;
+            setTimeout(() => { handle.style.transition = 'none'; }, 100);
+        }
+
+        async function connectHub() {
+            if (!navigator.bluetooth) {
+                updateStatus(false, 'Browser Unsupported', 'text-red-700');
+                return;
+            }
+            updateStatus(false, 'Scanning...', 'text-blue-500');
+            try {
+                // Filter specifically for WeDo 2.0 Hubs using the official service UUID
+                // and/or common name prefix, but whitelist the custom working service UUID
+                wedoHub = await navigator.bluetooth.requestDevice({
+                    filters: [
+                        { services: [OFFICIAL_WEDO_SERVICE_UUID] },
+                        { namePrefix: 'LPF2 Smart Hub' },
+                        { namePrefix: 'WeDo' }
+                    ],
+                    optionalServices: [WORKING_SERVICE_UUID]
+                });
+
+                wedoHub.addEventListener('gattserverdisconnected', onDisconnected);
+                updateStatus(false, 'Connecting...', 'text-orange-500');
+                const server = await wedoHub.gatt.connect();
+                
+                // Now we access the specific working service discovered earlier
+                const service = await server.getPrimaryService(WORKING_SERVICE_UUID);
+                motorCharacteristic = await service.getCharacteristic(WORKING_MOTOR_CHAR_UUID);
+                
+                try {
+                    deviceInfoCharacteristic = await service.getCharacteristic(WORKING_DEVICE_INFO_CHAR_UUID);
+                    await deviceInfoCharacteristic.startNotifications();
+                    deviceInfoCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+                } catch (e) { console.warn("Info notifications failed", e); }
+
+                updateStatus(true, `Connected`, 'text-green-600');
+                setTimeout(() => { sendMotorSpeed(1, 0); sendMotorSpeed(2, 0); }, 500);
+
+            } catch (error) {
+                console.error("Connection Error:", error);
+                updateStatus(false, 'Connection Failed', 'text-red-500');
+                wedoHub = null;
+            }
+        }
+
+        function disconnectHub() {
+            if (wedoHub && wedoHub.gatt.connected) wedoHub.gatt.disconnect();
+            else onDisconnected();
+        }
+
+        function onDisconnected() {
+            updateStatus(false, 'Disconnected', 'text-red-500');
+            wedoHub = null;
+            motorCharacteristic = null;
+            commandQueue.length = 0;
+            isWriting = false;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setupJoystick(1);
+            setupJoystick(2);
+            updateStatus(false, 'Disconnected', 'text-red-500');
+        });
+    </script>
+</body>
+</html>
